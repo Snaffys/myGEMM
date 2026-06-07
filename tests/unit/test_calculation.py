@@ -1,5 +1,5 @@
-import calculate_results_tuned
 import calculate_results_default
+import calculate_results_tuned
 
 
 def test_analyze_results_tuned_mean():
