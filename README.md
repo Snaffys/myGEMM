@@ -87,7 +87,7 @@ The goal of this work is to **study the step-by-step optimization of single-prec
 - **NVCC Compiler:** 13.1.115
 - **OpenCL Platform:** OpenCL 3.0
 - **Compiler:** GCC 15.2.1
-- **Compiler flags:** `-O3 -arch=sm_89 -Xcompiler -Wall`
+- **Compiler flags:** -O3 -arch=sm_89 -Xcompiler -Wall
 
 ### Libraries
 
@@ -201,7 +201,7 @@ Iterates over a grid of valid parameter combinations for each kernel. After that
 ### Matrix Size: 8192x8192x8192 (Tuned)
 
 | Implementation | Mean GFLOPS | Std GFLOPS | 95% CI | Dagostino p | Shapiro p |
-| -------------- | ----------: | ---------: | -----: | ----------: | --------: |
+| -------------- | ----------- | ---------- | ------ | ----------- | --------- |
 | cuBLAS         |        6165 |      23.89 |      8 |     0.15048 |   0.01809 |
 | clBLAS         |        2805 |       3.11 |      1 |     0.77702 |   0.05952 |
 | myGEMM1 (cl)   |       551.4 |       1.66 |    0.5 |     0.30525 |   0.06726 |
@@ -223,7 +223,7 @@ Iterates over a grid of valid parameter combinations for each kernel. After that
 ### Matrix Size: 8320x8320x8320 (Default)
 
 | Implementation | Mean GFLOPS | Std GFLOPS | 95% CI | Dagostino p | Shapiro p |
-| -------------- | ----------: | ---------: | -----: | ----------: | --------: |
+| -------------- | ----------- | ---------- | ------ | ----------- | --------- |
 | cuBLAS         |        6150 |      22.36 |      7 |     0.49800 |   0.11407 |
 | clBLAS         |        2840 |      36.71 |     12 |     0.00000 |   0.00000 |
 | myGEMM10 (cu)  |        4212 |       9.94 |      3 |     0.04064 |   0.00005 |
@@ -235,7 +235,7 @@ Iterates over a grid of valid parameter combinations for each kernel. After that
 ### Matrix Size: 8320x8320x8320 (Tuned)
 
 | Implementation | Mean GFLOPS | Std GFLOPS | 95% CI | Dagostino p | Shapiro p |
-| -------------- | ----------: | ---------: | -----: | ----------: | --------: |
+| -------------- | ----------- | ---------- | ------ | ----------- | --------- |
 | cuBLAS         |        6155 |      24.86 |      8 |     0.22382 |   0.03739 |
 | clBLAS         |      2840.9 |       2.81 |    0.9 |     0.69941 |   0.47770 |
 | myGEMM10 (cu)  |        4435 |      13.57 |      4 |     0.00000 |   0.00000 |
