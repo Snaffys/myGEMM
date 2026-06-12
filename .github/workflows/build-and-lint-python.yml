@@ -17,15 +17,18 @@ jobs:
       
     - name: Set up Python
       run: uv python install 3.11
+      
+    - name: Create venv
+      run: uv venv
 
     - name: Install dependencies
-      run: uv pip install --system ruff pytest numpy scipy
+      run: uv pip install ruff pytest numpy scipy
 
     - name: Run Ruff
-      run: ruff check --output-format=github .
+      run: uv run ruff check --output-format=github .
 
     - name: Check formatting
-      run: ruff format --check .
+      run: uv run ruff format --check .
 
     - name: Run unit tests
-      run: python -m pytest tests/unit/
+      run: uv run python -m pytest tests/unit/
