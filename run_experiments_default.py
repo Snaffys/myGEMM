@@ -1,69 +1,29 @@
 import csv
-import fileinput
-import os
-import re
-import shutil
 import subprocess
 import time
 
-SETTINGS_FILE = "src/settings.h"
-COMMON_FILE = "src/common.h"
-SETTINGS_BACKUP = "src/settings.h.bak"
-COMMON_BACKUP = "src/common.h.bak"
+from shared import (
+    COL_GFLOPS,
+    COL_IMPLEMENTATION,
+    COL_KERNEL,
+    COL_RUN,
+    COL_SIZE,
+    COOLDOWN_TIME_SEC,
+    GFLOPS_PATTERN,
+    PARAM_KERNEL,
+    RUNS,
+    SETTINGS_FILE,
+    SIZES,
+    WARMUPS,
+    compile_project,
+    create_backup,
+    restore_files,
+    set_num_runs,
+    set_size,
+    update_macros_in_file,
+)
+
 OUTPUT_FILE = "results/raw_results_default.csv"
-
-WARMUPS = 5
-RUNS = 40
-COOLDOWN_TIME_SEC = 240
-
-SIZES = [8192, 8320]
-
-GFLOPS_PATTERN = re.compile(r"--> *([0-9]+(?:\.[0-9]+)?) GFLOPS")
-
-
-def create_backup():
-    shutil.copy(COMMON_FILE, COMMON_BACKUP)
-    shutil.copy(SETTINGS_FILE, SETTINGS_BACKUP)
-
-
-def restore_files():
-    if os.path.exists(COMMON_BACKUP):
-        shutil.copy(COMMON_BACKUP, COMMON_FILE)
-        os.remove(COMMON_BACKUP)
-    if os.path.exists(SETTINGS_BACKUP):
-        shutil.copy(SETTINGS_BACKUP, SETTINGS_FILE)
-        os.remove(SETTINGS_BACKUP)
-
-
-def set_num_runs(num_runs):
-    for line in fileinput.input(COMMON_FILE, inplace=True):
-        if line.startswith("#define NUM_RUNS"):
-            print(f"#define NUM_RUNS {num_runs}")
-        else:
-            print(line, end="")
-
-
-def set_size(size):
-    for line in fileinput.input(COMMON_FILE, inplace=True):
-        if line.startswith("#define MINSIZE"):
-            print(f"#define MINSIZE ({size})")
-        elif line.startswith("#define MAXSIZE"):
-            print(f"#define MAXSIZE ({size})")
-        else:
-            print(line, end="")
-
-
-def set_kernel(kernel):
-    for line in fileinput.input(SETTINGS_FILE, inplace=True):
-        if line.startswith("#define KERNEL"):
-            print(f"#define KERNEL {kernel}")
-        else:
-            print(line, end="")
-
-
-def compile_project():
-    subprocess.run(["make", "clean"], check=True)
-    subprocess.run(["make", "build", "NVFLAGS=-O3 -arch=sm_89 -Xcompiler -Wall"], check=True)
 
 
 def run_program(current_kernel, current_size):
@@ -98,7 +58,7 @@ def run_program(current_kernel, current_size):
                 else:
                     continue
 
-                data[current_size][implementation] = {"gflops": gflops}
+                data[current_size][implementation] = {COL_GFLOPS: gflops}
 
     return data
 
@@ -106,7 +66,7 @@ def run_program(current_kernel, current_size):
 def run_kernel(writer, result_file, size, kernel):
     print(f"Kernel: {kernel}")
 
-    set_kernel(kernel)
+    update_macros_in_file(SETTINGS_FILE, PARAM_KERNEL, kernel)
     compile_project()
 
     print(f"Cooling down {COOLDOWN_TIME_SEC} seconds after compilation")
@@ -127,7 +87,7 @@ def run_kernel(writer, result_file, size, kernel):
             break
 
         for implementation in data[size]:
-            gflops = data[size][implementation]["gflops"]
+            gflops = data[size][implementation][COL_GFLOPS]
             writer.writerow([kernel, size, implementation, run, gflops])
 
         result_file.flush()
@@ -135,7 +95,7 @@ def run_kernel(writer, result_file, size, kernel):
 
 def run_experiments(result_file):
     writer = csv.writer(result_file)
-    writer.writerow(["kernel", "size", "implementation", "run", "gflops"])
+    writer.writerow([COL_KERNEL, COL_SIZE, COL_IMPLEMENTATION, COL_RUN, COL_GFLOPS])
 
     for size in SIZES:
         print(f"Size: {size}")

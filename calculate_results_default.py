@@ -1,8 +1,22 @@
 import csv
-import math
 
 import numpy as np
 from scipy import stats
+
+from shared import (
+    COL_CI95,
+    COL_DAGOSTINO_P,
+    COL_GFLOPS,
+    COL_IMPLEMENTATION,
+    COL_KERNEL,
+    COL_MEAN,
+    COL_SHAPIRO_P,
+    COL_SIZE,
+    COL_STD,
+    remove_outlier,
+    round_mean,
+    round_uncertainty,
+)
 
 INPUT_FILE = "results/raw_results_default.csv"
 OUTPUT_FILE = "results/clean_results_default.csv"
@@ -14,53 +28,11 @@ def load_data(filename):
     with open(filename, newline="") as file:
         reader = csv.DictReader(file)
         for row in reader:
-            key = (int(row["kernel"]), int(row["size"]), row["implementation"])
-            gflops = float(row["gflops"])
+            key = (int(row[COL_KERNEL]), int(row[COL_SIZE]), row[COL_IMPLEMENTATION])
+            gflops = float(row[COL_GFLOPS])
             data.setdefault(key, []).append(gflops)
 
     return data
-
-
-def remove_outlier(values):
-    values = np.array(values)
-
-    q1 = np.percentile(values, 25)
-    q3 = np.percentile(values, 75)
-    iqr = q3 - q1
-    lower = q1 - 1.5 * iqr
-    upper = q3 + 1.5 * iqr
-
-    mask = (values >= lower) & (values <= upper)
-    cleaned = values[mask]
-    outliers_count = len(values) - len(cleaned)
-
-    if outliers_count <= 1:
-        return cleaned, outliers_count
-    else:
-        return values, outliers_count
-
-
-def round_uncertainty(value):
-    if value == 0:
-        return 0
-
-    order = int(math.floor(math.log10(abs(value))))
-    first_digit = int(value / 10**order)
-
-    if first_digit == 1:
-        round_digits = order - 1
-    else:
-        round_digits = order
-
-    return round(value, -round_digits)
-
-
-def round_mean(value, uncertainty):
-    if uncertainty == 0:
-        return round(value)
-
-    digits = int(math.floor(math.log10(abs(uncertainty))))
-    return round(value, -digits)
 
 
 def analyze_results(values):
@@ -86,11 +58,11 @@ def analyze_results(values):
     std_rounded = round(std, 2)
 
     return {
-        "mean_rounded": mean_rounded,
-        "std_rounded": std_rounded,
-        "ci95_rounded": ci95_rounded,
-        "dagostino_p": dagostino_p,
-        "shapiro_p": shapiro_p,
+        COL_MEAN: mean_rounded,
+        COL_STD: std_rounded,
+        COL_CI95: ci95_rounded,
+        COL_DAGOSTINO_P: dagostino_p,
+        COL_SHAPIRO_P: shapiro_p,
     }
 
 
@@ -98,7 +70,7 @@ def write_results(data, filename):
     with open(filename, "w", newline="") as file:
         writer = csv.writer(file)
         writer.writerow(
-            ["kernel", "size", "implementation", "mean_gflops", "std_gflops", "95ci", "dagostino_p", "shapiro_p"]
+            [COL_KERNEL, COL_SIZE, COL_IMPLEMENTATION, COL_MEAN, COL_STD, COL_CI95, COL_DAGOSTINO_P, COL_SHAPIRO_P]
         )
 
         for key, values in data.items():
@@ -109,11 +81,11 @@ def write_results(data, filename):
             writer.writerow(
                 [
                     *key,
-                    result["mean_rounded"],
-                    result["std_rounded"],
-                    result["ci95_rounded"],
-                    round(result["dagostino_p"], 5),
-                    round(result["shapiro_p"], 5),
+                    result[COL_MEAN],
+                    result[COL_STD],
+                    result[COL_CI95],
+                    round(result[COL_DAGOSTINO_P], 5),
+                    round(result[COL_SHAPIRO_P], 5),
                 ]
             )
 

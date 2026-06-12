@@ -1,115 +1,97 @@
 import csv
-import fileinput
 import itertools
-import os
-import re
-import shutil
 import subprocess
 import time
 
-SETTINGS_FILE = "src/settings.h"
-COMMON_FILE = "src/common.h"
-SETTINGS_BACKUP = "src/settings.h.bak"
-COMMON_BACKUP = "src/common.h.bak"
+from shared import (
+    COL_GFLOPS,
+    COL_IMPLEMENTATION,
+    COL_KERNEL,
+    COL_RUN,
+    COL_SIZE,
+    COOLDOWN_TIME_SEC,
+    GFLOPS_PATTERN,
+    MAX_SHARED_MEM,
+    PARAM_KERNEL,
+    PARAM_TS,
+    PARAM_TSDK,
+    PARAM_TSK,
+    PARAM_TSM,
+    PARAM_TSN,
+    PARAM_WIDTH,
+    PARAM_WPT,
+    PARAM_WPTM,
+    PARAM_WPTN,
+    RUNS,
+    SETTINGS_FILE,
+    SIZES,
+    WARMUPS,
+    compile_project,
+    create_backup,
+    restore_files,
+    set_num_runs,
+    set_size,
+    update_macros_in_file,
+)
+
 OUTPUT_FILE = "results/raw_results_tuned.csv"
-
-WARMUPS = 5
-RUNS = 40
-COOLDOWN_TIME_SEC = 240
-
-SIZES = [8192, 8320]
-
-GFLOPS_PATTERN = re.compile(r"--> *([0-9]+(?:\.[0-9]+)?) GFLOPS")
-
-MAX_SHARED_MEM = 48 * 1024
-
-
-def create_backup():
-    shutil.copy(COMMON_FILE, COMMON_BACKUP)
-    shutil.copy(SETTINGS_FILE, SETTINGS_BACKUP)
-
-
-def restore_files():
-    if os.path.exists(COMMON_BACKUP):
-        shutil.copy(COMMON_BACKUP, COMMON_FILE)
-        os.remove(COMMON_BACKUP)
-    if os.path.exists(SETTINGS_BACKUP):
-        shutil.copy(SETTINGS_BACKUP, SETTINGS_FILE)
-        os.remove(SETTINGS_BACKUP)
-
-
-def update_macros_in_file(filepath, macro, value):
-    for line in fileinput.input(filepath, inplace=True):
-        if line.startswith(f"#define {macro} "):
-            print(f"#define {macro} {value}")
-        else:
-            print(line, end="")
-
-
-def set_num_runs(num_runs):
-    update_macros_in_file(COMMON_FILE, "NUM_RUNS", num_runs)
-
-
-def set_size(size):
-    update_macros_in_file(COMMON_FILE, "MINSIZE", f"({size})")
-    update_macros_in_file(COMMON_FILE, "MAXSIZE", f"({size})")
 
 
 def set_settings_file_macros(kernel, params):
-    update_macros_in_file(SETTINGS_FILE, "KERNEL", kernel)
-    update_macros_in_file(SETTINGS_FILE, "TS", params.get("TS", 32))
-    update_macros_in_file(SETTINGS_FILE, "WPT", params.get("WPT", 8))
-    update_macros_in_file(SETTINGS_FILE, "WIDTH", params.get("WIDTH", 4))
-    update_macros_in_file(SETTINGS_FILE, "TSDK", params.get("TSDK", 16))
-    update_macros_in_file(SETTINGS_FILE, "TSM", params.get("TSM", 128))
-    update_macros_in_file(SETTINGS_FILE, "TSN", params.get("TSN", 128))
-    update_macros_in_file(SETTINGS_FILE, "TSK", params.get("TSK", 16))
-    update_macros_in_file(SETTINGS_FILE, "WPTM", params.get("WPTM", 8))
-    update_macros_in_file(SETTINGS_FILE, "WPTN", params.get("WPTN", 8))
+    update_macros_in_file(SETTINGS_FILE, PARAM_KERNEL, kernel)
+    update_macros_in_file(SETTINGS_FILE, PARAM_TS, params.get(PARAM_TS, 32))
+    update_macros_in_file(SETTINGS_FILE, PARAM_WPT, params.get(PARAM_WPT, 8))
+    update_macros_in_file(SETTINGS_FILE, PARAM_WIDTH, params.get(PARAM_WIDTH, 4))
+    update_macros_in_file(SETTINGS_FILE, PARAM_TSDK, params.get(PARAM_TSDK, 16))
+    update_macros_in_file(SETTINGS_FILE, PARAM_TSM, params.get(PARAM_TSM, 128))
+    update_macros_in_file(SETTINGS_FILE, PARAM_TSN, params.get(PARAM_TSN, 128))
+    update_macros_in_file(SETTINGS_FILE, PARAM_TSK, params.get(PARAM_TSK, 16))
+    update_macros_in_file(SETTINGS_FILE, PARAM_WPTM, params.get(PARAM_WPTM, 8))
+    update_macros_in_file(SETTINGS_FILE, PARAM_WPTN, params.get(PARAM_WPTN, 8))
 
 
 def shared_memory_too_large(params, kernel):
     if kernel in (1, 2, 3):
-        ts = params.get("TS", 32)
+        ts = params.get(PARAM_TS, 32)
 
         asub = ts * ts * 4
         bsub = ts * ts * 4
         return asub + bsub > MAX_SHARED_MEM
     elif kernel == 4:
-        ts = params.get("TS", 32)
-        width = params.get("WIDTH", 1)
+        ts = params.get(PARAM_TS, 32)
+        width = params.get(PARAM_WIDTH, 1)
 
         asub = ts * (ts // width) * 4
         bsub = ts * (ts // width) * 4
         return asub + bsub > MAX_SHARED_MEM
     elif kernel == 5:
-        tsm = params["TSM"]
-        tsn = params["TSN"]
-        tsk = params["TSK"]
+        tsm = params[PARAM_TSM]
+        tsn = params[PARAM_TSN]
+        tsk = params[PARAM_TSK]
 
         asub = tsk * tsm * 4
         bsub = tsn * tsk * 4
         return asub + bsub > MAX_SHARED_MEM
     elif kernel == 6:
-        tsk = params.get("TSK", 16)
-        tsm = params.get("TSM", 128)
-        tsn = params.get("TSN", 128)
+        tsk = params.get(PARAM_TSK, 16)
+        tsm = params.get(PARAM_TSM, 128)
+        tsn = params.get(PARAM_TSN, 128)
 
         asub = tsk * tsm * 4
         bsub = tsn * (tsk + 2) * 4
         return asub + bsub > MAX_SHARED_MEM
     elif kernel in (7, 8):
-        tsk = params.get("TSK", 16)
-        tsm = params.get("TSM", 128)
-        tsn = params.get("TSN", 128)
+        tsk = params.get(PARAM_TSK, 16)
+        tsm = params.get(PARAM_TSM, 128)
+        tsn = params.get(PARAM_TSN, 128)
 
         asub = tsk * tsm * 4
         bsub = tsn * tsk * 4
         return asub + bsub > MAX_SHARED_MEM
     elif kernel in (9, 10):
-        tsk = params.get("TSK", 16)
-        tsm = params.get("TSM", 128)
-        tsn = params.get("TSN", 128)
+        tsk = params.get(PARAM_TSK, 16)
+        tsm = params.get(PARAM_TSM, 128)
+        tsn = params.get(PARAM_TSN, 128)
 
         asub = 2 * tsk * tsm * 4
         bsub = 2 * tsn * tsk * 4
@@ -119,9 +101,9 @@ def shared_memory_too_large(params, kernel):
 
 
 def valid_kernel5(params):
-    ts = params["TS"]
-    wpt = params["WPT"]
-    tsdk = params["TSDK"]
+    ts = params[PARAM_TS]
+    wpt = params[PARAM_WPT]
+    tsdk = params[PARAM_TSDK]
 
     if ts % wpt != 0:
         return False
@@ -133,10 +115,10 @@ def valid_kernel5(params):
 
 
 def valid_kernel6(params):
-    tsm = params["TSM"]
-    tsn = params["TSN"]
-    wptm = params["WPTM"]
-    wptn = params["WPTN"]
+    tsm = params[PARAM_TSM]
+    tsn = params[PARAM_TSN]
+    wptm = params[PARAM_WPTM]
+    wptn = params[PARAM_WPTN]
 
     if tsm % wptm != 0:
         return False
@@ -151,11 +133,11 @@ def valid_kernel6(params):
 
 
 def valid_kernel7_to_10(params):
-    width = params["WIDTH"]
-    tsm = params["TSM"]
-    tsn = params["TSN"]
-    wptm = params["WPTM"]
-    wptn = params["WPTN"]
+    width = params[PARAM_WIDTH]
+    tsm = params[PARAM_TSM]
+    tsn = params[PARAM_TSN]
+    wptm = params[PARAM_WPTM]
+    wptn = params[PARAM_WPTN]
 
     if tsm % wptm != 0:
         return False
@@ -170,7 +152,17 @@ def valid_kernel7_to_10(params):
 
 
 def kernel_param_grid(kernel):
-    base = {"TS": 32, "WPT": 8, "WIDTH": 4, "TSDK": 16, "TSM": 128, "TSN": 128, "TSK": 16, "WPTM": 8, "WPTN": 8}
+    base = {
+        PARAM_TS: 32,
+        PARAM_WPT: 8,
+        PARAM_WIDTH: 4,
+        PARAM_TSDK: 16,
+        PARAM_TSM: 128,
+        PARAM_TSN: 128,
+        PARAM_TSK: 16,
+        PARAM_WPTM: 8,
+        PARAM_WPTN: 8,
+    }
 
     grids = []
 
@@ -180,67 +172,70 @@ def kernel_param_grid(kernel):
     elif kernel == 2:
         for ts in [16, 32, 64]:
             parameters = dict(base)
-            parameters["TS"] = ts
+            parameters[PARAM_TS] = ts
             if not shared_memory_too_large(parameters, kernel):
                 grids.append(parameters)
     elif kernel == 3:
         for wpt in [2, 4, 8, 16]:
             parameters = dict(base)
-            parameters["TS"] = 32
-            parameters["WPT"] = wpt
-            if parameters["TS"] % parameters["WPT"] == 0 and not shared_memory_too_large(parameters, kernel):
+            parameters[PARAM_TS] = 32
+            parameters[PARAM_WPT] = wpt
+            if parameters[PARAM_TS] % parameters[PARAM_WPT] == 0 and not shared_memory_too_large(parameters, kernel):
                 grids.append(parameters)
     elif kernel == 4:
         for width in [1, 2, 4, 8]:
             parameters = dict(base)
-            parameters["WIDTH"] = width
+            parameters[PARAM_WIDTH] = width
             if not shared_memory_too_large(parameters, kernel):
                 grids.append(parameters)
     elif kernel == 5:
         for ts, tsdk, wpt in itertools.product([16, 32, 64], [8, 16, 32], [2, 4, 8, 16]):
             parameters = dict(base)
-            parameters.update({"TS": ts, "TSDK": tsdk, "WPT": wpt})
+            parameters.update({PARAM_TS: ts, PARAM_TSDK: tsdk, PARAM_WPT: wpt})
             if valid_kernel5(parameters) and not shared_memory_too_large(parameters, kernel):
                 grids.append(parameters)
     elif kernel == 6:
         for tile, tsk, wpt in itertools.product([64, 128, 256], [8, 16, 32], [4, 8, 16]):
             parameters = dict(base)
-            parameters.update({"TSM": tile, "TSN": tile, "TSK": tsk, "WPTM": wpt, "WPTN": wpt})
+            parameters.update({PARAM_TSM: tile, PARAM_TSN: tile, PARAM_TSK: tsk, PARAM_WPTM: wpt, PARAM_WPTN: wpt})
             if valid_kernel6(parameters) and not shared_memory_too_large(parameters, kernel):
                 grids.append(parameters)
     elif kernel == 7:
         for width, tile, tsk, wpt in itertools.product([2, 4, 8], [64, 128, 256], [8, 16, 32], [4, 8, 16]):
             parameters = dict(base)
-            parameters.update({"WIDTH": width, "TSM": tile, "TSN": tile, "TSK": tsk, "WPTM": wpt, "WPTN": wpt})
+            parameters.update(
+                {PARAM_WIDTH: width, PARAM_TSM: tile, PARAM_TSN: tile, PARAM_TSK: tsk, PARAM_WPTM: wpt, PARAM_WPTN: wpt}
+            )
             if valid_kernel7_to_10(parameters) and not shared_memory_too_large(parameters, kernel):
                 grids.append(parameters)
     elif kernel == 8:
         for width, tile, tsk, wpt in itertools.product([2, 4, 8], [64, 128, 256], [8, 16, 32], [4, 8, 16]):
             parameters = dict(base)
-            parameters.update({"WIDTH": width, "TSM": tile, "TSN": tile, "TSK": tsk, "WPTM": wpt, "WPTN": wpt})
+            parameters.update(
+                {PARAM_WIDTH: width, PARAM_TSM: tile, PARAM_TSN: tile, PARAM_TSK: tsk, PARAM_WPTM: wpt, PARAM_WPTN: wpt}
+            )
             if valid_kernel7_to_10(parameters) and not shared_memory_too_large(parameters, kernel):
                 grids.append(parameters)
     elif kernel == 9:
         for width, tile, tsk, wpt in itertools.product([2, 4, 8], [64, 128], [8, 16, 32], [4, 8]):
             parameters = dict(base)
-            parameters.update({"WIDTH": width, "TSM": tile, "TSN": tile, "TSK": tsk, "WPTM": wpt, "WPTN": wpt})
+            parameters.update(
+                {PARAM_WIDTH: width, PARAM_TSM: tile, PARAM_TSN: tile, PARAM_TSK: tsk, PARAM_WPTM: wpt, PARAM_WPTN: wpt}
+            )
             if valid_kernel7_to_10(parameters) and not shared_memory_too_large(parameters, kernel):
                 grids.append(parameters)
     elif kernel == 10:
         for width, tile, tsk, wpt in itertools.product([2, 4, 8], [128, 160], [8, 16, 32], [4, 8, 10]):
             parameters = dict(base)
-            parameters.update({"WIDTH": width, "TSM": tile, "TSN": tile, "TSK": tsk, "WPTM": wpt, "WPTN": wpt})
+            parameters.update(
+                {PARAM_WIDTH: width, PARAM_TSM: tile, PARAM_TSN: tile, PARAM_TSK: tsk, PARAM_WPTM: wpt, PARAM_WPTN: wpt}
+            )
             if valid_kernel7_to_10(parameters) and not shared_memory_too_large(parameters, kernel):
                 grids.append(parameters)
     elif kernel == 11:
         grids = [base]
 
     return grids
-
-
-def compile_project():
-    subprocess.run(["make", "clean"], check=True)
-    subprocess.run(["make", "build", "NVFLAGS=-O3 -arch=sm_89 -Xcompiler -Wall"], check=True)
 
 
 def run_program(kernel):
@@ -304,7 +299,7 @@ def run_config(kernel, params):
             break
 
         for implementation, gflops in data.items():
-            rows.append({"implementation": implementation, "run": run, "gflops": gflops})
+            rows.append({COL_IMPLEMENTATION: implementation, COL_RUN: run, COL_GFLOPS: gflops})
 
     return rows
 
@@ -313,20 +308,20 @@ def run_experiments(result_file):
     writer = csv.writer(result_file)
     writer.writerow(
         [
-            "kernel",
-            "size",
-            "implementation",
-            "TS",
-            "WPT",
-            "WIDTH",
-            "TSDK",
-            "TSM",
-            "TSN",
-            "TSK",
-            "WPTM",
-            "WPTN",
-            "run",
-            "gflops",
+            COL_KERNEL,
+            COL_SIZE,
+            COL_IMPLEMENTATION,
+            PARAM_TS,
+            PARAM_WPT,
+            PARAM_WIDTH,
+            PARAM_TSDK,
+            PARAM_TSM,
+            PARAM_TSN,
+            PARAM_TSK,
+            PARAM_WPTM,
+            PARAM_WPTN,
+            COL_RUN,
+            COL_GFLOPS,
         ]
     )
 
@@ -349,18 +344,18 @@ def run_experiments(result_file):
                         [
                             kernel,
                             size,
-                            row["implementation"],
-                            params.get("TS"),
-                            params.get("WPT"),
-                            params.get("WIDTH"),
-                            params.get("TSDK"),
-                            params.get("TSM"),
-                            params.get("TSN"),
-                            params.get("TSK"),
-                            params.get("WPTM"),
-                            params.get("WPTN"),
-                            row["run"],
-                            row["gflops"],
+                            row[COL_IMPLEMENTATION],
+                            params.get(PARAM_TS),
+                            params.get(PARAM_WPT),
+                            params.get(PARAM_WIDTH),
+                            params.get(PARAM_TSDK),
+                            params.get(PARAM_TSM),
+                            params.get(PARAM_TSN),
+                            params.get(PARAM_TSK),
+                            params.get(PARAM_WPTM),
+                            params.get(PARAM_WPTN),
+                            row[COL_RUN],
+                            row[COL_GFLOPS],
                         ]
                     )
                 result_file.flush()

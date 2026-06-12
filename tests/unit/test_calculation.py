@@ -1,33 +1,34 @@
 import calculate_results_default
 import calculate_results_tuned
+from shared import COL_CI95, COL_MEAN, COL_STD
 
 
 def test_analyze_results_tuned_mean():
     values = [100.0, 101.0, 102.0, 103.0, 104.0]
     result = calculate_results_tuned.analyze_results(values, 0)
-    assert result["mean_rounded"] == 102.0
+    assert result[COL_MEAN] == 102.0
 
 
 def test_analyze_results_tuned_zero_variance():
     values = [50.0, 50.0, 50.0, 50.0, 50.0]
     result = calculate_results_tuned.analyze_results(values, 0)
-    assert result["mean_rounded"] == 50.0
-    assert result["std_rounded"] == 0.0
-    assert result["ci95_rounded"] == 0
+    assert result[COL_MEAN] == 50.0
+    assert result[COL_STD] == 0.0
+    assert result[COL_CI95] == 0
 
 
 def test_analyze_results_default_mean():
     values = [100.0, 101.0, 102.0, 103.0, 104.0]
     result = calculate_results_default.analyze_results(values)
-    assert result["mean_rounded"] == 102.0
+    assert result[COL_MEAN] == 102.0
 
 
 def test_analyze_results_default_zero_variance():
     values = [50.0, 50.0, 50.0, 50.0, 50.0]
     result = calculate_results_default.analyze_results(values)
-    assert result["mean_rounded"] == 50.0
-    assert result["std_rounded"] == 0.0
-    assert result["ci95_rounded"] == 0
+    assert result[COL_MEAN] == 50.0
+    assert result[COL_STD] == 0.0
+    assert result[COL_CI95] == 0
 
 
 def test_process_best_configs_selects_highest_mean():
