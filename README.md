@@ -258,6 +258,13 @@ Other kernels showed little to no change, their default parameters were already 
 
 Charts of GFLOPS performance for both default and tuned kernel configurations are available in the `charts/` folder:
 
+### Comparison
+
+![8192 comparison](charts/performance_8192_comparison.png)
+![8320 comparison](charts/performance_8320_comparison.png)
+
+### Indvividual charts
+
 ![8192 default](charts/performance_8192_default.png) 
 ![8192 tuned](charts/performance_8192_tuned.png)
 ![8320 default](charts/performance_8320_default.png) 
